@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Vulnerable Chat App</title>
+</head>
+<body>
+<h1>Vulnerable Chat App (Demo)</h1>
+
+
+<section>
+<h2>Register / Login</h2>
+<form id="register-form">
+<input name="username" placeholder="username">
+<input name="password" placeholder="password">
+<button type="submit">Register</button>
+</form>
+
+
+<form id="login-form">
+<input name="username" placeholder="username">
+<input name="password" placeholder="password">
+<button type="submit">Login</button>
+</form>
+</section>
+
+
+<section>
+<h2>Chat</h2>
+<form id="message-form">
+<input id="message-input" name="message" placeholder="message">
+<button type="submit">Send</button>
+</form>
+
+
+<ul id="messages"></ul>
+</section>
+
+
+<script src="/chat.js"></script>
+</body>
+</html>
