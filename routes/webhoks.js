@@ -20,8 +20,16 @@ if (payload && payload.run_command) {
 try {
 // naive 'eval' simulation: run JS code submitted in webhook
 // eslint-disable-next-line no-eval
-eval(payload.run_command); // vulnerability: remote code execution (RCE) via eval
-res.json({ ok: true, note: 'ran command (insecure demo)'});
+const commands = {
+    sayHello: () => "Hello!",
+    getTime: () => new Date().toISOString()
+};
+
+if (commands[payload.run_command]) {
+    const result = commands[payload.run_command]();
+    res.send({ result });
+} else {
+    res.status(400).send({ error: "Invalid command" });res.json({ ok: true, note: 'ran command (insecure demo)'});
 } catch (e) {
 res.status(500).json({ error: 'failed to run command' });
 }
