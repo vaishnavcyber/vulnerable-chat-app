@@ -1,42 +1,79 @@
 // routes/webhook.js
-// Demonstrates an insecure GitHub-like webhook handler that does NOT verify signatures.
-// This illustrates why webhook secrets and signature verification are essential.
-
+// Secure GitHub-style webhook handler with:
+// - Signature validation (HMAC SHA256)
+// - Safe command handling (whitelisted)
+// - No eval, no dynamic code execution
+// - Proper error responses and logging
 
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 
+// GitHub webhook secret (must match your GitHub Webhook settings)
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 
-// Insecure: Accepts any webhook payload without validating the HMAC signature.
+// Utility: Validate GitHub HMAC signature
+function verifySignature(req) {
+    const signature = req.headers['x-hub-signature-256'];
+    if (!signature) return false;
+
+    const body = JSON.stringify(req.body);
+
+    const hmac = crypto.createHmac('sha256', WEBHOOK_SECRET);
+    hmac.update(body, 'utf-8');
+    const expectedSignature = `sha256=${hmac.digest('hex')}`;
+
+    return crypto.timingSafeEqual(
+        Buffer.from(signature),
+        Buffer.from(expectedSignature)
+    );
+}
+
+// HTTPS POST handler
 router.post('/', (req, res) => {
-const event = req.headers['x-github-event'] || 'unknown';
-const payload = req.body;
+    const event = req.headers['x-github-event'] || 'unknown';
 
+    // 1️⃣ Signature verification
+    if (!verifySignature(req)) {
+        console.error("❌ Invalid webhook signature — blocked");
+        return res.status(401).json({ error: "Invalid signature" });
+    }
 
-// Dangerous behavior: run a command derived from the webhook payload. This is intentionally insecure
-// to show what *not* to do; a SAST may flag risky use of inputs passed to shell functions or eval.
-if (payload && payload.run_command) {
-// WARNING: This is intentionally insecure! Do not do this on any real system.
-try {
-// naive 'eval' simulation: run JS code submitted in webhook
-// eslint-disable-next-line no-eval
-const commands = {
-    sayHello: () => "Hello!",
-    getTime: () => new Date().toISOString()
-};
+    console.log(`✔ Received valid webhook: ${event}`);
 
-if (commands[payload.run_command]) {
-    const result = commands[payload.run_command]();
-    res.send({ result });
-} else {
-    res.status(400).send({ error: "Invalid command" });res.json({ ok: true, note: 'ran command (insecure demo)'});
-} catch (e) {
-res.status(500).json({ error: 'failed to run command' });
-}
-} else {
-res.json({ ok: true, event });
-}
+    const payload = req.body;
+
+    // 2️⃣ Safe whitelisted operations only
+    const commands = {
+        sayHello: () => "Hello!",
+        getTime: () => new Date().toISOString()
+    };
+
+    // If the webhook contains a command request
+    if (payload && payload.run_command) {
+        const commandName = payload.run_command;
+
+        if (!commands[commandName]) {
+            console.warn(`⚠ Received invalid command: ${commandName}`);
+            return res.status(400).json({ error: "Invalid command" });
+        }
+
+        // Safe execution from predefined dictionary
+        try {
+            const result = commands[commandName]();
+            return res.json({ ok: true, command: commandName, result });
+        } catch (err) {
+            console.error("❌ Command error:", err);
+            return res.status(500).json({ error: "Command execution failed" });
+        }
+    }
+
+    // 3️Normal events (push, PR, etc.)
+    return res.json({
+        ok: true,
+        event,
+        message: "Webhook received and signature verified."
+    });
 });
-
 
 module.exports = router;
